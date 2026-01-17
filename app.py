@@ -13,7 +13,7 @@ stop_words = set(stopwords.words("english"))
 
 # ---------------- LOAD MODELS ----------------
 sos_model = joblib.load("sos_model (1).pkl")
-vectorizer = joblib.load("vectorizer(1).pkl")
+vectorizer = joblib.load("vectorizer.pkl")
 emotion_model = joblib.load("emotion_model.pkl")
 
 # ---------------- FUNCTIONS ----------------
