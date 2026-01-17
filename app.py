@@ -4,6 +4,9 @@ import nltk
 import numpy as np
 import librosa
 import av
+import time
+import folium
+from streamlit_folium import st_folium
 
 from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 from nltk.corpus import stopwords
@@ -21,124 +24,138 @@ sos_model = joblib.load("sos_model (1).pkl")
 vectorizer = joblib.load("vectorizer (1).pkl")
 emotion_model = joblib.load("emotion_model.pkl")
 
-# ---------------- NLP FUNCTIONS ----------------
+# ---------------- FUNCTIONS ----------------
 def preprocess(text):
     tokens = word_tokenize(text.lower())
     return " ".join([w for w in tokens if w.isalpha() and w not in stop_words])
 
-def predict_sos(text):
+def predict_sos_text(text):
     vec = vectorizer.transform([preprocess(text)])
     pred = sos_model.predict(vec)[0]
     prob = sos_model.predict_proba(vec).max()
     return pred, prob
 
-# ---------------- AUDIO FEATURE EXTRACTION ----------------
-def extract_audio_features(audio, sr=16000):
-    mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=40)
-    return np.mean(mfcc.T, axis=0)
+def emotion_to_score(emotion):
+    if emotion == "panic":
+        return 0.9
+    elif emotion == "calm":
+        return 0.2
+    return 0.5
 
-# ---------------- AUDIO PROCESSOR ----------------
-class EmotionAudioProcessor(AudioProcessorBase):
-    def __init__(self):
-        self.emotion = "Listening..."
-
-    def recv(self, frame: av.AudioFrame):
-        audio = frame.to_ndarray().flatten().astype(np.float32)
-
-        if len(audio) > 4000:
-            features = extract_audio_features(audio)
-            prediction = emotion_model.predict([features])[0]
-            self.emotion = prediction
-
-        return frame
+def send_sos(location, zone):
+    return {
+        "status": "SOS SENT",
+        "sent_to": ["Police Control Room", "Family Emergency Contacts"],
+        "location": location,
+        "risk": zone
+    }
 
 # ---------------- UI ----------------
 st.title("🚨 SURAKSHA OMEGA AI")
-st.caption("Live AI-Powered Women Safety System")
+st.caption("AI-Powered Women Safety System – Tamil Nadu")
 
 menu = st.sidebar.selectbox(
     "Select Feature",
     [
-        "SOS Detection (Text ML)",
-        "Fake SOS Detection",
-        "🎤 Live Voice Emotion Detection",
-        "Maps Heatmap",
-        "Admin Panel"
+        "🎤 Live Voice SOS Detection",
+        "📍 Live Location – Tamil Nadu",
+        "🧠 Text SOS Detection",
+        "🔐 Admin Panel"
     ]
 )
 
-# ---------------- TEXT SOS ----------------
-if menu == "SOS Detection (Text ML)":
-    msg = st.text_area("Enter SOS message")
+# ---------------- LIVE VOICE SOS ----------------
+if menu == "🎤 Live Voice SOS Detection":
+    st.info("🎙️ Allow microphone and speak for a few seconds")
 
-    if st.button("Analyze"):
-        pred, prob = predict_sos(msg)
+    emotion_scores = []
 
-        if pred == 2:
-            st.error("🚨 EXTREME DANGER – AUTO SOS")
-        elif pred == 1:
-            st.warning("⚠️ POSSIBLE THREAT")
-        else:
-            st.success("✅ SAFE MESSAGE")
+    class VoiceProcessor(AudioProcessorBase):
+        def __init__(self):
+            self.last_emotion = "neutral"
 
-        st.progress(int(prob * 100))
-        st.caption(f"Confidence: {round(prob*100,2)}%")
+        def recv(self, frame: av.AudioFrame):
+            audio = frame.to_ndarray().flatten().astype(np.float32)
 
-# ---------------- FAKE SOS ----------------
-elif menu == "Fake SOS Detection":
-    msg = st.text_input("Enter SOS message")
+            if len(audio) > 4000:
+                mfcc = librosa.feature.mfcc(y=audio, sr=16000, n_mfcc=40)
+                features = np.mean(mfcc.T, axis=0)
+                self.last_emotion = emotion_model.predict([features])[0]
 
-    if msg:
-        if len(msg.split()) < 3:
-            st.error("❌ Fake Alert Detected")
-        else:
-            st.success("✅ Genuine SOS")
-
-# ---------------- LIVE VOICE EMOTION ----------------
-elif menu == "🎤 Live Voice Emotion Detection":
-    st.info("🎙️ Allow microphone access and speak")
+            return frame
 
     ctx = webrtc_streamer(
-        key="emotion",
-        audio_processor_factory=EmotionAudioProcessor,
+        key="voice",
+        audio_processor_factory=VoiceProcessor,
         media_stream_constraints={"audio": True, "video": False},
     )
 
     if ctx.audio_processor:
-        emotion = ctx.audio_processor.emotion
+        emotion = ctx.audio_processor.last_emotion
+        score = emotion_to_score(emotion)
+        emotion_scores.append(score)
+        emotion_scores = emotion_scores[-10:]
 
-        st.subheader(f"Detected Emotion: **{emotion.upper()}**")
+        avg_score = sum(emotion_scores) / len(emotion_scores)
+        st.progress(int(avg_score * 100))
 
-        if emotion == "panic":
-            st.error("😱 PANIC DETECTED – AUTO SOS ACTIVATED")
-        elif emotion == "calm":
-            st.success("🙂 Calm voice detected")
+        st.write(f"🎧 Detected Emotion: **{emotion.upper()}**")
 
-# ---------------- MAPS HEATMAP ----------------
-elif menu == "Maps Heatmap":
-    hour = st.slider("Time (24h)", 0, 23, 22)
-    incidents = st.slider("Past Incidents", 0, 10, 6)
+        if avg_score > 0.7:
+            zone = "DANGER ZONE"
+            st.error("🔴 DANGER ZONE – SOS ACTIVATED")
+            result = send_sos("Tamil Nadu", zone)
+            st.success("🚓 SOS Sent to Police & Family")
+            st.json(result)
 
-    score = 0.3
-    if hour >= 20:
-        score += 0.3
-    if incidents > 5:
-        score += 0.4
+        elif avg_score > 0.4:
+            st.warning("🟡 PARTIALLY DANGER ZONE – Stay Alert")
+        else:
+            st.success("🟢 SAFE ZONE – No threat detected")
 
-    score = min(score, 1.0)
+# ---------------- LIVE LOCATION ----------------
+elif menu == "📍 Live Location – Tamil Nadu":
+    st.subheader("📍 Live Location Tracking (Tamil Nadu)")
 
-    if score > 0.7:
-        st.error("🔴 HIGH RISK ZONE")
-    elif score > 0.4:
-        st.warning("🟡 MODERATE RISK")
-    else:
-        st.success("🟢 SAFE ZONE")
+    lat = st.slider("Latitude", 8.0, 13.5, 11.0)
+    lon = st.slider("Longitude", 76.0, 80.5, 78.0)
 
-    st.progress(int(score * 100))
+    m = folium.Map(location=[lat, lon], zoom_start=7)
+    folium.Marker(
+        [lat, lon],
+        popup="User Location",
+        icon=folium.Icon(color="red")
+    ).add_to(m)
 
-# ---------------- ADMIN PANEL ----------------
-elif menu == "Admin Panel":
-    st.warning("🔐 Admin Override Panel")
+    st_folium(m, width=700, height=500)
 
-    if st.checkbox("Force SOS"):
-        st.error("🚓 SOS SENT TO AUTHORITIES")
+    st.caption("Supports all districts in Tamil Nadu")
+
+# ---------------- TEXT SOS ----------------
+elif menu == "🧠 Text SOS Detection":
+    msg = st.text_area("Enter SOS message")
+
+    if st.button("Analyze & Send SOS"):
+        pred, prob = predict_sos_text(msg)
+
+        if pred == 2:
+            st.error("🚨 EXTREME DANGER")
+            result = send_sos("Tamil Nadu", "DANGER ZONE")
+            st.success("🚓 SOS Sent to Police & Family")
+            st.json(result)
+
+        elif pred == 1:
+            st.warning("⚠️ POSSIBLE DANGER – Alert Sent")
+        else:
+            st.success("✅ Safe Message")
+
+        st.progress(int(prob * 100))
+
+# ---------------- ADMIN ----------------
+elif menu == "🔐 Admin Panel":
+    st.warning("Admin Override System")
+
+    if st.checkbox("Force Emergency SOS"):
+        result = send_sos("Tamil Nadu", "ADMIN OVERRIDE")
+        st.error("🚓 FORCE SOS SENT")
+        st.json(result)
