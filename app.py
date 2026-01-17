@@ -1,128 +1,112 @@
-# ===================== IMPORTS =====================
 import streamlit as st
 import numpy as np
-import joblib
+import pandas as pd
 import librosa
-import av
+import librosa.display
+import matplotlib.pyplot as plt
 import folium
+import io
+import base64
+from datetime import datetime
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 from streamlit_folium import st_folium
 from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
+import av
 
-# ===================== APP CONFIG =====================
-st.set_page_config(
-    page_title="SURAKSHA OMEGA AI",
-    layout="wide"
-)
+# -------------------- APP CONFIG --------------------
+st.set_page_config(page_title="SURAKSHA OMEGA AI", layout="wide")
+st.title("🛡️ SURAKSHA OMEGA – Women Safety System")
+st.caption("Live Voice Risk Detection + SOS + Tamil Nadu Map")
 
-st.title("🛡️ SURAKSHA OMEGA – AI Women Safety System")
-st.caption("Live Voice Emotion Detection • SOS AI • Tamil Nadu Location")
+# -------------------- TRAIN SAMPLE SAFETY MODEL --------------------
+@st.cache_data
+def train_model():
+    np.random.seed(42)
+    n = 2000
+    lat = np.random.normal(13.08, 0.03, n)
+    lon = np.random.normal(80.27, 0.03, n)
+    hour = np.random.randint(0, 24, n)
+    audio_energy = np.random.uniform(0, 1, n)
 
-# ===================== LOAD ML MODELS =====================
-# Make sure these files are in the repo root
-emotion_model = joblib.load("sos_model (1).pkl")
-vectorizer = joblib.load("vectorizer (1).pkl")  # reserved for text SOS feature
+    risk = []
+    for h, e in zip(hour, audio_energy):
+        score = 1
+        if h > 20 or h < 6: score -= 0.4
+        if e > 0.6: score -= 0.4
+        risk.append(1 if score > 0.4 else 0)
 
-# ===================== SIDEBAR =====================
-menu = st.sidebar.radio(
-    "Select Feature",
-    [
-        "🎤 Live Voice Emotion Detection",
-        "📍 Live Location (Tamil Nadu)",
-        "🚨 SOS Status"
-    ]
-)
+    X = pd.DataFrame({"lat": lat, "lon": lon, "hour": hour, "energy": audio_energy})
+    y = np.array(risk)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    model = RandomForestClassifier(n_estimators=200)
+    model.fit(X_train, y_train)
+    return model
 
-# ===================== SESSION STATE =====================
-if "zone" not in st.session_state:
-    st.session_state.zone = "SAFE"
+model = train_model()
 
-# ===================== 🎤 VOICE EMOTION DETECTION =====================
-if menu == "🎤 Live Voice Emotion Detection":
-    st.info("🎙️ Click START and speak clearly for 5–10 seconds")
+# -------------------- AUDIO FEATURE EXTRACTION --------------------
+def extract_audio_features(audio_path):
+    y, sr = librosa.load(audio_path, sr=22050)
+    energy = np.mean(librosa.feature.rms(y=y))
+    return energy, y, sr
 
-    class VoiceProcessor(AudioProcessorBase):
-        def __init__(self):
-            self.emotion = "neutral"
+# -------------------- SAFETY ANALYSIS --------------------
+def analyze_safety(lat, lon, hour, audio_path):
+    if audio_path is None:
+        return "❌ Please record voice first", None, None
 
-        def recv(self, frame: av.AudioFrame):
-            audio = frame.to_ndarray().flatten().astype(np.float32)
+    energy, y, sr = extract_audio_features(audio_path)
+    features = [[lat, lon, hour, energy]]
+    prediction = model.predict(features)[0]
+    confidence = model.predict_proba(features)[0][prediction] * 100
+    status = "🚨 HIGH RISK DETECTED" if prediction == 0 else "✅ SAFE ZONE"
 
-            if len(audio) > 4000:
-                mfcc = librosa.feature.mfcc(
-                    y=audio,
-                    sr=16000,
-                    n_mfcc=40
-                )
-                features = np.mean(mfcc.T, axis=0)
-                self.emotion = emotion_model.predict([features])[0]
+    # Waveform plot
+    plt.figure(figsize=(10,3))
+    librosa.display.waveshow(y, sr=sr)
+    plt.title("Live Voice Waveform")
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    buf.seek(0)
+    img_data = base64.b64encode(buf.read()).decode()
+    plt.close()
 
-            return frame
+    # Folium map
+    m = folium.Map(location=[lat, lon], zoom_start=15)
+    folium.Marker([lat, lon], popup=status).add_to(m)
 
-    ctx = webrtc_streamer(
-        key="voice",
-        audio_processor_factory=VoiceProcessor,
-        media_stream_constraints={"audio": True, "video": False},
-        async_processing=True
+    return (
+        f"""
+### 🛡️ Safety Result
+**Status:** {status}
+**Confidence:** {confidence:.2f}%
+**Audio Energy:** {energy:.3f}
+""",
+        img_data,
+        m
     )
 
-    st.divider()
+# -------------------- STREAMLIT UI --------------------
+st.sidebar.header("Input Parameters")
+lat = st.sidebar.number_input("Latitude", value=13.082)
+lon = st.sidebar.number_input("Longitude", value=80.27)
+hour = st.sidebar.slider("Hour", 0, 23, value=datetime.now().hour)
 
-    if ctx and ctx.state.playing:
-        emotion = ctx.audio_processor.emotion
-        st.write(f"🎧 Detected Emotion: **{emotion.upper()}**")
+st.header("🎤 Record Live Voice")
+audio_file = st.file_uploader("Upload or Record Voice (WAV/MP3)", type=["wav","mp3"])
 
-        if emotion == "panic":
-            st.session_state.zone = "DANGER"
-            st.error("🔴 DANGER ZONE – SOS ACTIVATED")
-        elif emotion == "neutral":
-            st.session_state.zone = "PARTIAL"
-            st.warning("🟡 PARTIALLY DANGER ZONE")
-        else:
-            st.session_state.zone = "SAFE"
-            st.success("🟢 SAFE ZONE")
+if st.button("🔍 Analyze Safety"):
+    report, waveform_img, map_obj = analyze_safety(lat, lon, hour, audio_file)
+    st.markdown(report)
+    if waveform_img:
+        st.image(base64.b64decode(waveform_img))
+    if map_obj:
+        try:
+            st_folium(map_obj)
+        except Exception as e:
+            st.error(f"Map could not load: {e}")
 
-# ===================== 📍 TAMIL NADU LOCATION =====================
-elif menu == "📍 Live Location (Tamil Nadu)":
-    st.info("📡 Live Location – Tamil Nadu Coverage")
-
-    # Tamil Nadu center coordinates
-    lat, lon = 11.1271, 78.6569
-
-    map_tn = folium.Map(location=[lat, lon], zoom_start=7)
-
-    # Add a marker for the user location
-    folium.Marker(
-        [lat, lon],
-        popup="User Location (Tamil Nadu)",
-        icon=folium.Icon(color="red")
-    ).add_to(map_tn)
-
-    # Display map safely
-    try:
-        st_folium(map_tn)
-    except Exception as e:
-        st.error(f"Map could not load: {e}")
-
-# ===================== 🚨 SOS STATUS =====================
-elif menu == "🚨 SOS Status":
-    st.subheader("🚨 Emergency Alert Panel")
-
-    if st.session_state.zone == "DANGER":
-        st.error("🚓 SOS SENT TO POLICE")
-        st.success("📞 SOS SENT TO FAMILY MEMBERS")
-        st.markdown("""
-        **Automatic Actions Triggered**
-        - Panic emotion detected from live voice
-        - User location shared (Tamil Nadu)
-        - Emergency escalation activated
-        """)
-
-    elif st.session_state.zone == "PARTIAL":
-        st.warning("⚠️ Possible risk detected – Monitoring user")
-
-    else:
-        st.success("✅ User is Safe – No SOS Triggered")
-
-# ===================== FOOTER =====================
+# -------------------- FOOTER --------------------
 st.markdown("---")
-st.caption("© SURAKSHA OMEGA AI | Stable • ML Powered • Hackathon Ready")
+st.caption("© SURAKSHA OMEGA AI | Live Voice Safety + SOS + TN Map")
