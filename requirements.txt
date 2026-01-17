@@ -4,4 +4,5 @@ nltk
 joblib
 numpy
 librosa
-flask
+streamlit-webrtc
+av
