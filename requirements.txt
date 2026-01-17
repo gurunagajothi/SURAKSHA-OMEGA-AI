@@ -5,5 +5,5 @@ scikit-learn
 joblib
 librosa
 av
-folium
-streamlit-folium
+folium==0.14.0
+streamlit-folium==0.12.0
