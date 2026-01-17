@@ -4,7 +4,6 @@ import joblib
 import librosa
 import av
 import folium
-from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
 from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 
@@ -20,7 +19,7 @@ st.caption("Live Voice Emotion • SOS AI • Tamil Nadu Live Location")
 # LOAD MODELS
 # --------------------------------------------------
 emotion_model = joblib.load("sos_model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
+vectorizer = joblib.load("vectorizer.pkl")  # kept for future text SOS
 
 # --------------------------------------------------
 # SIDEBAR
@@ -31,7 +30,7 @@ menu = st.sidebar.radio(
 )
 
 # --------------------------------------------------
-# GLOBAL STATE
+# SESSION STATE
 # --------------------------------------------------
 if "zone" not in st.session_state:
     st.session_state.zone = "SAFE"
@@ -76,7 +75,7 @@ if menu == "🎤 Live Voice Emotion Detection":
 
         if emotion == "panic":
             st.session_state.zone = "DANGER"
-            st.error("🔴 DANGER ZONE DETECTED")
+            st.error("🔴 DANGER ZONE – SOS ACTIVATED")
         elif emotion == "neutral":
             st.session_state.zone = "PARTIAL"
             st.warning("🟡 PARTIALLY DANGER ZONE")
@@ -89,41 +88,41 @@ if menu == "🎤 Live Voice Emotion Detection":
 # --------------------------------------------------
 elif menu == "📍 Live Location (Tamil Nadu)":
 
-    st.info("📡 Showing Live Location (Tamil Nadu Coverage)")
+    st.info("📡 Live Location Coverage – Tamil Nadu")
 
-    # Default Tamil Nadu center
+    # Tamil Nadu center coordinates
     lat, lon = 11.1271, 78.6569
 
     m = folium.Map(location=[lat, lon], zoom_start=7)
 
     folium.Marker(
         [lat, lon],
-        popup="Tamil Nadu – User Location",
+        popup="User Location (Tamil Nadu)",
         icon=folium.Icon(color="red")
     ).add_to(m)
 
     st_folium(m, width=700, height=500)
 
 # --------------------------------------------------
-# 🚨 SOS STATUS & ALERT SYSTEM
+# 🚨 SOS STATUS
 # --------------------------------------------------
 elif menu == "🚨 SOS Status":
 
-    st.subheader("🚨 SOS MONITORING PANEL")
+    st.subheader("🚨 Emergency Alert System")
 
     if st.session_state.zone == "DANGER":
         st.error("🚓 SOS SENT TO POLICE")
         st.success("📞 SOS SENT TO FAMILY MEMBERS")
 
         st.markdown("""
-        **Actions Triggered Automatically:**
-        - Voice emotion classified as **PANIC**
+        **Automatic Actions:**
+        - Panic voice detected
         - Location shared (Tamil Nadu)
-        - Emergency alert generated
+        - Emergency escalation triggered
         """)
 
     elif st.session_state.zone == "PARTIAL":
-        st.warning("⚠️ User may need help – Monitoring")
+        st.warning("⚠️ User might be in danger – Monitoring")
 
     else:
         st.success("✅ User Safe – No SOS Triggered")
@@ -132,4 +131,4 @@ elif menu == "🚨 SOS Status":
 # FOOTER
 # --------------------------------------------------
 st.markdown("---")
-st.caption("© SURAKSHA OMEGA AI | Final Year / Hackathon Ready")
+st.caption("© SURAKSHA OMEGA AI | Stable • Hackathon Ready • ML Powered")
