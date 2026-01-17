@@ -7,4 +7,3 @@ librosa
 av
 folium
 streamlit-folium
-geopy
