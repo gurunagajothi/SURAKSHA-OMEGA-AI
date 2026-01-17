@@ -19,8 +19,8 @@ st.caption("Live Voice Emotion Detection • SOS AI • Tamil Nadu Location")
 
 # ===================== LOAD ML MODELS =====================
 # Make sure these files are in the repo root
-emotion_model = joblib.load("sos_model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")  # reserved for text SOS feature
+emotion_model = joblib.load("sos_model (1).pkl")
+vectorizer = joblib.load("vectorizer (1).pkl")  # reserved for text SOS feature
 
 # ===================== SIDEBAR =====================
 menu = st.sidebar.radio(
