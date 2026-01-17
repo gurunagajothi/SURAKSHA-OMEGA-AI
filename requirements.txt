@@ -1,8 +1,10 @@
 streamlit
+streamlit-webrtc
 scikit-learn
 nltk
 joblib
 numpy
 librosa
-streamlit-webrtc
 av
+folium
+streamlit-folium
