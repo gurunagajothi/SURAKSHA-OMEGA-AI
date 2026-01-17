@@ -1,3 +1,4 @@
+# ===================== IMPORTS =====================
 import streamlit as st
 import numpy as np
 import joblib
@@ -7,40 +8,38 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 
-# --------------------------------------------------
-# APP CONFIG
-# --------------------------------------------------
-st.set_page_config(page_title="SURAKSHA OMEGA AI", layout="wide")
-
-st.title("🛡️ SURAKSHA OMEGA – AI Women Safety System")
-st.caption("Live Voice Emotion • SOS AI • Tamil Nadu Live Location")
-
-# --------------------------------------------------
-# LOAD MODELS
-# --------------------------------------------------
-emotion_model = joblib.load("sos_model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")  # kept for future text SOS
-
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
-menu = st.sidebar.radio(
-    "Select Module",
-    ["🎤 Live Voice Emotion Detection", "📍 Live Location (Tamil Nadu)", "🚨 SOS Status"]
+# ===================== APP CONFIG =====================
+st.set_page_config(
+    page_title="SURAKSHA OMEGA AI",
+    layout="wide"
 )
 
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
+st.title("🛡️ SURAKSHA OMEGA – AI Women Safety System")
+st.caption("Live Voice Emotion Detection • SOS AI • Tamil Nadu Location")
+
+# ===================== LOAD ML MODELS =====================
+# These must exist in your repo root
+emotion_model = joblib.load("sos_model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")  # kept for future text SOS use
+
+# ===================== SIDEBAR =====================
+menu = st.sidebar.radio(
+    "Select Feature",
+    [
+        "🎤 Live Voice Emotion Detection",
+        "📍 Live Location (Tamil Nadu)",
+        "🚨 SOS Status"
+    ]
+)
+
+# ===================== SESSION STATE =====================
 if "zone" not in st.session_state:
     st.session_state.zone = "SAFE"
 
-# --------------------------------------------------
-# 🎤 LIVE VOICE EMOTION DETECTION
-# --------------------------------------------------
+# ===================== 🎤 VOICE EMOTION =====================
 if menu == "🎤 Live Voice Emotion Detection":
 
-    st.info("🎙️ Click START and speak loudly for 5–10 seconds")
+    st.info("🎙️ Click START and speak clearly for 5–10 seconds")
 
     class VoiceProcessor(AudioProcessorBase):
         def __init__(self):
@@ -51,10 +50,13 @@ if menu == "🎤 Live Voice Emotion Detection":
 
             if len(audio) > 4000:
                 mfcc = librosa.feature.mfcc(
-                    y=audio, sr=16000, n_mfcc=40
+                    y=audio,
+                    sr=16000,
+                    n_mfcc=40
                 )
                 features = np.mean(mfcc.T, axis=0)
 
+                # Predict emotion
                 self.emotion = emotion_model.predict([features])[0]
 
             return frame
@@ -70,7 +72,6 @@ if menu == "🎤 Live Voice Emotion Detection":
 
     if ctx and ctx.state.playing:
         emotion = ctx.audio_processor.emotion
-
         st.write(f"🎧 Detected Emotion: **{emotion.upper()}**")
 
         if emotion == "panic":
@@ -83,52 +84,46 @@ if menu == "🎤 Live Voice Emotion Detection":
             st.session_state.zone = "SAFE"
             st.success("🟢 SAFE ZONE")
 
-# --------------------------------------------------
-# 📍 LIVE LOCATION – TAMIL NADU
-# --------------------------------------------------
+# ===================== 📍 TAMIL NADU LOCATION =====================
 elif menu == "📍 Live Location (Tamil Nadu)":
 
-    st.info("📡 Live Location Coverage – Tamil Nadu")
+    st.info("📡 Live Location – Tamil Nadu Coverage")
 
     # Tamil Nadu center coordinates
     lat, lon = 11.1271, 78.6569
 
-    m = folium.Map(location=[lat, lon], zoom_start=7)
+    map_tn = folium.Map(location=[lat, lon], zoom_start=7)
 
     folium.Marker(
         [lat, lon],
         popup="User Location (Tamil Nadu)",
         icon=folium.Icon(color="red")
-    ).add_to(m)
+    ).add_to(map_tn)
 
-    st_folium(m, width=700, height=500)
+    st_folium(map_tn, width=750, height=500)
 
-# --------------------------------------------------
-# 🚨 SOS STATUS
-# --------------------------------------------------
+# ===================== 🚨 SOS STATUS =====================
 elif menu == "🚨 SOS Status":
 
-    st.subheader("🚨 Emergency Alert System")
+    st.subheader("🚨 Emergency Alert Panel")
 
     if st.session_state.zone == "DANGER":
         st.error("🚓 SOS SENT TO POLICE")
         st.success("📞 SOS SENT TO FAMILY MEMBERS")
 
         st.markdown("""
-        **Automatic Actions:**
-        - Panic voice detected
-        - Location shared (Tamil Nadu)
-        - Emergency escalation triggered
+        **Automatic Actions Triggered**
+        - Panic emotion detected from live voice
+        - User location shared (Tamil Nadu)
+        - Emergency escalation activated
         """)
 
     elif st.session_state.zone == "PARTIAL":
-        st.warning("⚠️ User might be in danger – Monitoring")
+        st.warning("⚠️ Possible risk detected – Monitoring user")
 
     else:
-        st.success("✅ User Safe – No SOS Triggered")
+        st.success("✅ User is Safe – No SOS Triggered")
 
-# --------------------------------------------------
-# FOOTER
-# --------------------------------------------------
+# ===================== FOOTER =====================
 st.markdown("---")
-st.caption("© SURAKSHA OMEGA AI | Stable • Hackathon Ready • ML Powered")
+st.caption("© SURAKSHA OMEGA AI | Stable • ML Powered • Hackathon Ready")
