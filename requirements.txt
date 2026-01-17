@@ -1,10 +1,10 @@
-streamlit
-streamlit-webrtc
-scikit-learn
-nltk
-joblib
+streamlit==1.31.1
+streamlit-webrtc==0.47.0
 numpy
+scikit-learn
+joblib
 librosa
 av
 folium
 streamlit-folium
+geopy
