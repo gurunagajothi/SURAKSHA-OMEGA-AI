@@ -1,0 +1,10 @@
+streamlit
+scikit-learn
+pandas
+numpy
+nltk
+textblob
+langdetect
+joblib
+folium
+streamlit-folium
