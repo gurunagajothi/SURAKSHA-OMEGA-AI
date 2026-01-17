@@ -18,9 +18,9 @@ st.title("🛡️ SURAKSHA OMEGA – AI Women Safety System")
 st.caption("Live Voice Emotion Detection • SOS AI • Tamil Nadu Location")
 
 # ===================== LOAD ML MODELS =====================
-# These must exist in your repo root
-emotion_model = joblib.load("sos_model (1).pkl")
-vectorizer = joblib.load("vectorizer (1).pkl")  # kept for future text SOS use
+# Make sure these files are in the repo root
+emotion_model = joblib.load("sos_model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")  # reserved for text SOS feature
 
 # ===================== SIDEBAR =====================
 menu = st.sidebar.radio(
@@ -36,9 +36,8 @@ menu = st.sidebar.radio(
 if "zone" not in st.session_state:
     st.session_state.zone = "SAFE"
 
-# ===================== 🎤 VOICE EMOTION =====================
+# ===================== 🎤 VOICE EMOTION DETECTION =====================
 if menu == "🎤 Live Voice Emotion Detection":
-
     st.info("🎙️ Click START and speak clearly for 5–10 seconds")
 
     class VoiceProcessor(AudioProcessorBase):
@@ -55,8 +54,6 @@ if menu == "🎤 Live Voice Emotion Detection":
                     n_mfcc=40
                 )
                 features = np.mean(mfcc.T, axis=0)
-
-                # Predict emotion
                 self.emotion = emotion_model.predict([features])[0]
 
             return frame
@@ -86,7 +83,6 @@ if menu == "🎤 Live Voice Emotion Detection":
 
 # ===================== 📍 TAMIL NADU LOCATION =====================
 elif menu == "📍 Live Location (Tamil Nadu)":
-
     st.info("📡 Live Location – Tamil Nadu Coverage")
 
     # Tamil Nadu center coordinates
@@ -94,23 +90,26 @@ elif menu == "📍 Live Location (Tamil Nadu)":
 
     map_tn = folium.Map(location=[lat, lon], zoom_start=7)
 
+    # Add a marker for the user location
     folium.Marker(
         [lat, lon],
         popup="User Location (Tamil Nadu)",
         icon=folium.Icon(color="red")
     ).add_to(map_tn)
 
-    st_folium(map_tn, width=750, height=500)
+    # Display map safely
+    try:
+        st_folium(map_tn)
+    except Exception as e:
+        st.error(f"Map could not load: {e}")
 
 # ===================== 🚨 SOS STATUS =====================
 elif menu == "🚨 SOS Status":
-
     st.subheader("🚨 Emergency Alert Panel")
 
     if st.session_state.zone == "DANGER":
         st.error("🚓 SOS SENT TO POLICE")
         st.success("📞 SOS SENT TO FAMILY MEMBERS")
-
         st.markdown("""
         **Automatic Actions Triggered**
         - Panic emotion detected from live voice
