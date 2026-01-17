@@ -1,143 +1,148 @@
 import streamlit as st
 import joblib
-import numpy as np
 import nltk
-import folium
-from textblob import TextBlob
-from langdetect import detect
-from streamlit_folium import st_folium
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+# -------------------------------
+# Setup
+# -------------------------------
+st.set_page_config(page_title="SURAKSHA OMEGA AI", layout="centered")
 
 nltk.download("punkt")
+nltk.download("stopwords")
+stop_words = set(stopwords.words("english"))
 
-# ---------------- CONFIG ----------------
-st.set_page_config(
-    page_title="SURAKSHA OMEGA AI",
-    page_icon="🚨",
-    layout="wide"
-)
-
-st.title("🚨 SURAKSHA OMEGA AI")
-st.caption("AI-Powered Women Safety & Emergency Intelligence System")
-
-# ---------------- LOAD ML MODELS ----------------
+# -------------------------------
+# Load ML Models
+# -------------------------------
 model = joblib.load("sos_model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
 
-# ---------------- FUNCTIONS ----------------
-def predict_threat(text):
-    vec = vectorizer.transform([text])
-    level = model.predict(vec)[0]
+# -------------------------------
+# Preprocess
+# -------------------------------
+def preprocess(text):
+    tokens = word_tokenize(text.lower())
+    return " ".join([w for w in tokens if w.isalpha() and w not in stop_words])
 
-    if level == 0:
-        return "🟢 SAFE", 0
-    elif level == 1:
-        return "🟡 SUSPICIOUS", 1
-    else:
-        return "🔴 DANGER", 2
+# -------------------------------
+# SOS Prediction
+# -------------------------------
+def predict_sos(text):
+    clean = preprocess(text)
+    vec = vectorizer.transform([clean])
+    pred = model.predict(vec)[0]
+    prob = model.predict_proba(vec).max()
+    return pred, prob
 
-def emotion_detection(text):
-    polarity = TextBlob(text).sentiment.polarity
-    if polarity < -0.5:
-        return "Fear 😨"
-    elif polarity < 0:
-        return "Anxiety 😟"
-    else:
-        return "Normal 🙂"
-
-def language_detection(text):
-    try:
-        return {"en":"English","ta":"Tamil","hi":"Hindi"}.get(detect(text),"Unknown")
-    except:
-        return "Unknown"
-
+# -------------------------------
+# Fake SOS Detection (FIXED)
+# -------------------------------
 def fake_sos(text):
-    return len(text.split()) < 3
+    words = text.split()
 
-def voice_emotion(pitch, energy):
-    if pitch > 220 and energy > 0.7:
-        return "High Panic 😨"
-    elif pitch > 180:
-        return "Stressed 😟"
-    else:
-        return "Normal 🙂"
+    if len(words) < 3:
+        return True, "Message too short"
 
-def generate_heatmap():
-    lat = np.random.uniform(12.90, 13.10, 30)
-    lon = np.random.uniform(77.50, 77.70, 30)
-    risk = np.random.uniform(0.3, 1.0, 30)
-    return lat, lon, risk
+    if all(w.lower() in ["help", "save", "me"] for w in words):
+        return True, "Repeated generic words"
 
-# ---------------- SIDEBAR ----------------
+    return False, "Message has context"
+
+# -------------------------------
+# UI
+# -------------------------------
+st.title("🚨 SURAKSHA OMEGA AI")
+st.caption("AI-Powered Women Safety System")
+
 menu = st.sidebar.radio(
     "Select Feature",
     [
-        "AI SOS Detection",
-        "Voice Emotion ML",
-        "Danger Zone Heatmap",
+        "SOS Intent Detection",
         "Fake SOS Detection",
-        "Multilingual SOS",
-        "Explainable AI"
+        "Threat Level",
+        "Language Switch"
     ]
 )
 
-# ---------------- FEATURES ----------------
-if menu == "AI SOS Detection":
-    st.header("🧠 AI SOS Intent Detection")
+# -------------------------------
+# SOS INTENT
+# -------------------------------
+if menu == "SOS Intent Detection":
+    st.header("🧠 SOS Intent Detection (ML)")
 
-    text = st.text_area("Enter emergency text / voice transcript")
+    msg = st.text_area("Enter message")
 
     if st.button("Analyze"):
-        status, level = predict_threat(text)
-        st.success(f"Threat Level: {status}")
-        st.info(f"Language: {language_detection(text)}")
-        st.warning(f"Emotion: {emotion_detection(text)}")
+        if msg:
+            pred, prob = predict_sos(msg)
 
-        if level == 2:
-            st.error("🚨 AUTO SOS TRIGGER RECOMMENDED")
+            if pred == 2:
+                st.error("🚨 EXTREME DANGER – AUTO SOS")
+            elif pred == 1:
+                st.warning("⚠️ POSSIBLE DANGER")
+            else:
+                st.success("✅ SAFE MESSAGE")
 
-elif menu == "Voice Emotion ML":
-    st.header("🎤 Voice Emotion Detection")
-    pitch = st.slider("Voice Pitch (Hz)", 100, 300, 180)
-    energy = st.slider("Voice Energy", 0.0, 1.0, 0.5)
-    st.success("Detected Emotion: " + voice_emotion(pitch, energy))
+            st.progress(int(prob * 100))
+            st.caption(f"Confidence: {round(prob*100,2)}%")
 
-elif menu == "Danger Zone Heatmap":
-    st.header("🗺️ AI Danger Zone Heatmap")
-
-    lat, lon, risk = generate_heatmap()
-    m = folium.Map(location=[12.97, 77.59], zoom_start=12)
-
-    for i in range(len(lat)):
-        folium.Circle(
-            location=[lat[i], lon[i]],
-            radius=200,
-            color="red" if risk[i] > 0.7 else "orange",
-            fill=True
-        ).add_to(m)
-
-    st_folium(m, width=700, height=500)
-
+# -------------------------------
+# FAKE SOS (ERROR FIXED)
+# -------------------------------
 elif menu == "Fake SOS Detection":
     st.header("🚫 Fake SOS Detection")
+
     msg = st.text_input("Enter SOS message")
+
     if msg:
-        st.error("❌ Fake Alert") if fake_sos(msg) else st.success("✅ Genuine SOS")
+        is_fake, reason = fake_sos(msg)
 
-elif menu == "Multilingual SOS":
-    st.header("🌐 Multilingual SOS")
-    st.code({
-        "English": "Help me! I am in danger!",
-        "Tamil": "உதவி தேவை! நான் ஆபத்தில் இருக்கிறேன்!",
-        "Hindi": "मदद चाहिए! मैं खतरे में हूँ!"
-    })
+        if is_fake:
+            st.error("❌ Fake Alert Detected")
+            st.caption(f"Reason: {reason}")
+        else:
+            st.success("✅ Genuine SOS")
+            st.caption("Message appears valid")
 
-elif menu == "Explainable AI":
-    st.header("🔍 Explainable AI")
-    st.write("""
-    AI triggers SOS based on:
-    • Emergency keywords
-    • TF-IDF similarity
-    • Sentiment polarity
-    • Voice stress features
-    • Risk zone probability
-    """)
+# -------------------------------
+# THREAT LEVEL
+# -------------------------------
+elif menu == "Threat Level":
+    st.header("📊 Threat Level Estimation")
+
+    time = st.slider("Time (24h)", 0, 23, 21)
+    area = st.selectbox("Area Type", ["crowded", "isolated"])
+
+    score = 0.4
+    if time >= 20:
+        score += 0.3
+    if area == "isolated":
+        score += 0.3
+
+    score = min(score, 1.0)
+
+    if score > 0.7:
+        st.error("🔴 HIGH RISK AREA")
+    elif score > 0.4:
+        st.warning("🟡 MODERATE RISK")
+    else:
+        st.success("🟢 SAFE AREA")
+
+    st.progress(int(score * 100))
+
+# -------------------------------
+# LANGUAGE SWITCH
+# -------------------------------
+elif menu == "Language Switch":
+    st.header("🌐 Language Support")
+
+    lang = st.selectbox("Select Language", ["English", "Tamil", "Hindi"])
+
+    if lang == "Tamil":
+        st.success("அவசர SOS செயல்படுத்தப்பட்டது")
+    elif lang == "Hindi":
+        st.success("आपातकालीन SOS सक्रिय")
+    else:
+        st.success("Emergency SOS Activated")
